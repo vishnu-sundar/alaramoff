@@ -4,7 +4,7 @@ AlarmOff lets you select several saved OnePlus Clock alarms and turn their switc
 
 ## Install
 
-1. Open [GitHub Actions](../../actions/workflows/android.yml) and choose a successful run. Under **Artifacts**, download **AlarmOff-debug**. GitHub may ask you to sign in.
+1. Open [GitHub Actions](https://github.com/vishnu-sundar/alaramoff/actions/workflows/android.yml) and choose a successful run. Under **Artifacts**, download **AlarmOff-debug**. GitHub may ask you to sign in.
 2. Extract the ZIP and install **AlarmOff-debug.apk**. Android may ask you to allow the app opening the APK to install it. For USB installation, use `adb install -r AlarmOff-debug.apk`. The ZIP includes a SHA-256 checksum.
 3. Open **AlarmOff → Review access**. Read the disclosure and select **Agree and open settings**. Under your device’s downloaded accessibility services, enable **AlarmOff Clock access**, then return to AlarmOff. On some sideloaded installations Android requires **App info → ⋮ → Allow restricted settings** first. Menu names vary by OxygenOS release.
 4. Tap **Read alarms**. If Clock opens a different tab, open **Alarm**. Keep Clock visible until the scan finishes. If OxygenOS keeps Clock in front afterward, switch back to AlarmOff through Recents.
@@ -29,12 +29,12 @@ The artifact is a debug build. Builds signed by different debug keys require uni
 | OnePlus / OxygenOS | The OnePlus manual documents using the Clock UI. Our review did not identify a published third-party provider contract, read/write permission, or supported bulk-toggle intent for its alarm database. An internal provider on a particular release would not establish a supported public contract. | No provider probing, private URIs, copied databases, vendor permissions, root, or hidden APIs. |
 | Android accessibility | With explicit system access, a service can inspect a visible node tree, use scroll actions and click an exposed switch. | Runs deterministic operations only after a user request, checks the window and reads back switch state. |
 
-Sources: [Android AlarmClock](https://developer.android.com/reference/android/provider/AlarmClock), [AlarmManager](https://developer.android.com/reference/android/app/AlarmManager#getNextAlarmClock()), [accessibility services](https://developer.android.com/guide/topics/ui/accessibility/views/service), [node actions](https://developer.android.com/reference/android/view/accessibility/AccessibilityNodeInfo.AccessibilityAction), [OxygenOS 14 user manual, Clock](https://service.oneplus.com/content/dam/support/user-manuals/common/OxygenOS_14.0_User_Manual.pdf), [Android restricted settings](https://support.google.com/android/answer/12623953).
+See [Android AlarmClock](https://developer.android.com/reference/android/provider/AlarmClock), [AlarmManager](https://developer.android.com/reference/android/app/AlarmManager#getNextAlarmClock()), [accessibility services](https://developer.android.com/guide/topics/ui/accessibility/views/service), [node actions](https://developer.android.com/reference/android/view/accessibility/AccessibilityNodeInfo.AccessibilityAction), [OxygenOS 14 user manual, Clock](https://service.oneplus.com/content/dam/support/user-manuals/common/OxygenOS_14.0_User_Manual.pdf), [Android restricted settings](https://support.google.com/android/answer/12623953).
 
 ## OxygenOS compatibility and privacy
 
 - The distributed app looks for a preinstalled or system-updated Clock package using the OnePlus, OPlus or ColorOS package IDs configured in `app/src/main/res/values/strings.xml`. These are candidate packages. The package name alone does not guarantee compatible row semantics.
-- AlarmOff reads visible **Alarm** rows. It needs an identifiable time, a checkable switch and a verifiable list boundary. Long lists need stable row positions or a reliable total. It stops on ambiguous layouts, changed rosters, missing rows, verification failures or OEM prompts. It never chooses a screen coordinate, deletes an alarm, guesses a switch state, or presses an OEM “skip next” dialog.
+- AlarmOff reads visible **Alarm** rows. It needs an identifiable time, a checkable switch and a verifiable list boundary. Long lists need stable row positions or a reliable total. It stops on ambiguous layouts, changed rosters, missing rows or verification failures. If Clock asks how to disable a repeating alarm, you have up to 35 seconds to choose the full schedule in Clock. AlarmOff resumes only after it can verify the switch. Choosing “skip next” leaves the recurring switch on and stops the batch. It never chooses a screen coordinate, deletes an alarm, guesses a switch state, or presses an OEM “skip next” dialog.
 - The app preserves recognizable 12/24-hour time and exposed names and repeat rules. Missing metadata is marked in the UI. English text fallbacks supplement resource IDs. Other languages, merged descriptions, new Clock layouts and custom holiday or sleep schedules may require manual handling. Give identical alarms distinct labels in Clock before bulk-selecting them.
 - If your version is unsupported, use **Open Clock** in the result and change its switches directly. To check a new OxygenOS build, create two disposable alarms with different labels, include a repeating alarm, cancel one review, then disable and re-enable them. Check the actual switches in Clock after each action.
 - AlarmOff declares no Internet, exact-alarm, overlay or storage permission. Android alone binds the service using `BIND_ACCESSIBILITY_SERVICE`. Alarm details, selection and pending operations live only in memory. Only the consent flag is stored in private preferences. The service has no idle scanning, analytics, network upload or restartable automation.
@@ -56,7 +56,7 @@ CI builds and verifies the signed debug APK. JVM tests cover parsing, identity c
 To reproduce the end-to-end check, start a disposable emulator and run:
 
 ```sh
-./gradlew :app:assembleQa :clock-fixture:assembleDebug :clock-fixture:assembleDebugAndroidTest
+./gradlew :app:assembleDebug :app:assembleQa :clock-fixture:assembleDebug :clock-fixture:assembleDebugAndroidTest
 python3 testing/device_smoke.py
 ```
 

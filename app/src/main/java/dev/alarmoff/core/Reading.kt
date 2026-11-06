@@ -15,7 +15,7 @@ data class UiNode(
     val description: String = "", val checkable: Boolean = false, val checked: Boolean = false,
     val selected: Boolean = false, val scrollable: Boolean = false, val back: Boolean = false,
     val forward: Boolean = false, val position: Int? = null, val count: Int? = null,
-    val children: List<UiNode> = emptyList()
+    val children: List<UiNode> = emptyList(), val heading: Boolean = false
 ) {
     fun walk(): Sequence<UiNode> = sequence {
         yield(this@UiNode)
@@ -43,18 +43,26 @@ object ClockReader {
     private fun isList(n: UiNode) = listId.containsMatchIn(n.id) || n.scrollable || n.back || n.forward ||
         n.kind.endsWith("RecyclerView") || n.kind.endsWith("ListView") || n.kind.endsWith("ScrollView") || n.count != null
 
-    private fun hasAlarmMarker(nodes: List<UiNode>) = nodes.any { n ->
-        listId.containsMatchIn(n.id) || n.id.contains("alarm_time") ||
-            ((n.selected || n.id.contains("title") || n.id.contains("heading")) &&
-                n.words.any { it.equals("Alarm", true) || it.equals("Alarms", true) }) ||
-            (isToggle(n) && n.id.contains("alarm"))
+    private val otherSetting = Regex("""vibrat|snooze|ringtone|notification|skip_next|bedtime|fade_in""")
+
+    private fun looksLikeAlarmList(nodes: List<UiNode>): Boolean {
+        if (nodes.any { listId.containsMatchIn(it.id) || it.id.contains("alarm_empty") }) return true
+        val tab = nodes.any { n -> (n.selected || n.heading || n.id.contains("title") || n.id.contains("heading")) &&
+            n.words.any { it.equals("Alarm", true) || it.equals("Alarms", true) } }
+        val collection = nodes.any { it.count != null || it.kind.endsWith("RecyclerView") || it.kind.endsWith("ListView") }
+        val alarmRows = nodes.any { it.id.contains("alarm_time") } && nodes.any { isToggle(it) && it.id.contains("alarm") }
+        return tab || (collection && alarmRows)
     }
 
     fun read(root: UiNode): Reading {
         val nodes = root.walk().toList()
-        if (!hasAlarmMarker(nodes) || nodes.any { it.kind.endsWith("EditText") || it.kind.endsWith("TimePicker") })
+        if (nodes.any { it.id.contains("dialog") || it.id.contains("bottom_sheet") || it.id == "alerttitle" })
+            throw ClockProblem("Clock is displaying a prompt. Complete or cancel it in Clock.")
+        if (!looksLikeAlarmList(nodes) || nodes.any { it.kind.endsWith("EditText") || it.kind.endsWith("TimePicker") || it.id.contains("alarm_editor") })
             throw ClockProblem("Open the Alarm tab in OnePlus Clock. This screen is not a readable alarm list.")
         val toggles = nodes.filter(::isToggle)
+        if (toggles.any { otherSetting.containsMatchIn(it.id) })
+            throw ClockProblem("Clock is showing alarm settings. Return to the Alarm list.")
         if (toggles.isEmpty()) {
             val explicitEmpty = nodes.any { n -> n.id.contains("empty") && n.id.contains("alarm") ||
                 n.words.any { it.trim().lowercase() in setOf("no alarms", "no alarms set", "no alarms yet", "no alarm", "no alarms added") } }
@@ -75,20 +83,25 @@ object ClockReader {
         val parents = mutableMapOf<Int, UiNode>()
         fun index(n: UiNode) { for (child in n.children) { parents[child.handle] = n; index(child) } }
         index(scope)
+        val owned = mutableSetOf<Int>()
         val entries = toggles.map { toggle ->
             val lineage = generateSequence(toggle) { parents[it.handle] }.toList()
             val ancestors = lineage.takeWhile { it !== scope }
-            val row = ancestors.lastOrNull { node ->
+            val candidates = ancestors.filter { node ->
                 node.walk().count(::isToggle) == 1 && node.walk().any { n -> n.words.any { clockTime.containsMatchIn(clean(it)) } }
-            } ?: if (toggles.size == 1 && isToggle(scope)) scope else null
+            }
+            val row = candidates.firstOrNull { it.position != null }
+                ?: candidates.firstOrNull { node -> node.walk().any { it !== toggle && it.words.isNotEmpty() } }
+                ?: candidates.firstOrNull()
+                ?: if (toggles.size == 1 && isToggle(scope)) scope else null
             if (row == null) throw ClockProblem("A visible switch could not be matched to exactly one alarm time.")
+            row.walk().forEach { owned += it.handle }
             val key = keyFor(row) ?: throw ClockProblem("Clock exposed an ambiguous alarm time. No switch can be chosen safely.")
             Entry(Alarm(key, toggle.checked), lineage.firstNotNullOfOrNull { it.position }, toggle.handle)
         }
         val visibleTimes = scope.walk().filter { it.id.contains("time") && !it.id.contains("timer") &&
             it.words.any { value -> clockTime.containsMatchIn(clean(value)) } }.toList()
-        if (!scroller.back && !scroller.forward && visibleTimes.size > entries.size &&
-            visibleTimes.map { it.words.first() }.distinct().size > entries.size)
+        if (!scroller.back && !scroller.forward && visibleTimes.any { it.handle !in owned })
             throw ClockProblem("Some displayed times have no readable alarm switch.")
         return Reading(Page(entries, scroller.back, scroller.forward, scope.count ?: scroller.count), scroller.handle)
     }

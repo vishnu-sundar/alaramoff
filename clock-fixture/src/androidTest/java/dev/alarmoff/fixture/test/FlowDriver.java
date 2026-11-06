@@ -9,7 +9,6 @@ import android.os.Bundle;
 import android.os.ParcelFileDescriptor;
 import android.os.SystemClock;
 import android.view.accessibility.AccessibilityNodeInfo;
-import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,12 +27,18 @@ public final class FlowDriver extends Instrumentation {
             shell("am start -n " + FIX + ".FixtureActivity");
             waitFor("Alarms", false);
             assertActive(10);
+            shell("am start -n dev.alarmoff/dev.alarmoff.MainActivity");
+            waitFor("OnePlus Clock unavailable", false);
+            assertActive(10);
+            step("The distributed APK refuses the test Clock on a stock emulator");
             shell("am start -n " + APP);
             click("Review access");
             click("Agree and open settings");
+            waitFor("Accessibility", false);
             shell("settings put secure enabled_accessibility_services dev.alarmoff.qa/dev.alarmoff.clock.ClockService");
             shell("settings put secure accessibility_enabled 1");
-            shell("am start -n " + APP);
+            shell("input keyevent KEYCODE_BACK");
+            shell("am start -f 0x14000000 -n " + APP);
             click("Read alarms");
             waitFor("Refreshed 14 alarm(s).", false);
             assertActive(10);
@@ -45,8 +50,16 @@ public final class FlowDriver extends Instrumentation {
             step("Cancelling the review leaves every alarm unchanged");
             click("Disable selected");
             click("Disable 1");
+            waitFor("Turn off recurring alarm", false);
+            assertActive(10);
+            SystemClock.sleep(650);
+            click("Turn off recurring alarm");
             waitFor("Verified 1 alarm(s) disabled.", false);
             assertActive(9);
+            for (int i = 0; i < 14; i++) {
+                if (clock().getBoolean("alarm_" + i, false) != (i != 0 && i % 3 != 2))
+                    throw new AssertionError("Wrong selection at fixture index " + i);
+            }
             step("Selected disable changed only the first alarm");
             click("Select all");
             click("Deselect all");
@@ -103,7 +116,7 @@ public final class FlowDriver extends Instrumentation {
     private AccessibilityNodeInfo find(AccessibilityNodeInfo node, String wanted, boolean prefix) {
         if (node == null) return null;
         for (CharSequence c : new CharSequence[]{node.getText(), node.getContentDescription()}) {
-            if (c != null && (prefix ? c.toString().startsWith(wanted) : c.toString().equals(wanted))) return node;
+            if (c != null && (prefix ? c.toString().startsWith(wanted) : c.toString().equalsIgnoreCase(wanted))) return node;
         }
         for (int i = 0; i < node.getChildCount(); i++) {
             AccessibilityNodeInfo hit = find(node.getChild(i), wanted, prefix);
@@ -114,7 +127,10 @@ public final class FlowDriver extends Instrumentation {
     private AccessibilityNodeInfo waitFor(String wanted, boolean prefix) {
         long end = SystemClock.elapsedRealtime() + 65000;
         do {
-            AccessibilityNodeInfo result = find(ui.getRootInActiveWindow(), wanted, prefix);
+            AccessibilityNodeInfo root = ui.getRootInActiveWindow();
+            AccessibilityNodeInfo result = find(root, wanted, prefix);
+            if (result == null && (wanted.startsWith("Refreshed ") || wanted.startsWith("Verified ")) &&
+                find(root, "Open Clock", false) != null) throw new AssertionError("Clock operation stopped while awaiting " + wanted);
             if (result != null) return result;
             SystemClock.sleep(160);
         } while (SystemClock.elapsedRealtime() < end);

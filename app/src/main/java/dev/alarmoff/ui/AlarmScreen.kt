@@ -43,7 +43,7 @@ private val rounded = RoundedCornerShape(20.dp)
         runCatching { activity.startActivity(intent) }.onFailure { ClockSession.fail("Clock could not be opened.") }
     }
     fun settings() {
-        runCatching { activity.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+        runCatching { activity.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             .onFailure { ClockSession.fail("Open Accessibility in Android Settings to manage AlarmOff.") }
     }
     Scaffold(containerColor = colors.background, bottomBar = {

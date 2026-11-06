@@ -44,4 +44,13 @@ class ClockReaderTest {
         assertTrue(ClockReader.read(list(text("alarm_empty", "No alarms"))).page.entries.isEmpty())
         assertThrows(ClockProblem::class.java) { ClockReader.read(list()) }
     }
+    @Test fun rejectsEditorWithOnlyTimeAndVibrationSwitch() {
+        val editor = row(row(text("alarm_time", "07:15"), toggle(true).copy(id = "vibrate_switch")))
+        assertThrows(ClockProblem::class.java) { ClockReader.read(editor) }
+        assertThrows(ClockProblem::class.java) { ClockReader.read(list(editor)) }
+    }
+    @Test fun identicalTimeInRowWithoutSwitchCannotBeHiddenByOtherAlarm() {
+        val root = list(row(text("alarm_time", "07:15"), toggle(true)), row(text("alarm_time", "07:15")))
+        assertThrows(ClockProblem::class.java) { ClockReader.read(root) }
+    }
 }

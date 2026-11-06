@@ -54,7 +54,12 @@ internal class AndroidClockPort(private val service: ClockService, private val p
             refs[handle] = n
             val actions = n.actionList.map { it.id }
             val children = (0 until n.childCount).mapNotNull { index ->
-                n.getChild(index)?.takeIf { it.isVisibleToUser }?.let { snapshot(it, depth + 1) }
+                val child = n.getChild(index) ?: return@mapNotNull null
+                // Attached, partially clipped rows can expose noninteractive text beyond the viewport.
+                // Controls always have to be visible, both here and immediately before a click.
+                val rowText = child.childCount == 0 && child.className?.toString()?.endsWith("TextView") == true &&
+                    !child.isClickable && !child.isCheckable && !child.text.isNullOrBlank()
+                if (child.isVisibleToUser || rowText) snapshot(child, depth + 1) else null
             }
             return UiNode(handle, n.viewIdResourceName.orEmpty().substringAfterLast('/').lowercase(),
                 n.className?.toString().orEmpty(), n.text?.toString().orEmpty(), n.contentDescription?.toString().orEmpty(),
@@ -62,7 +67,7 @@ internal class AndroidClockPort(private val service: ClockService, private val p
                 AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD in actions || AccessibilityAction.ACTION_SCROLL_UP.id in actions,
                 AccessibilityNodeInfo.ACTION_SCROLL_FORWARD in actions || AccessibilityAction.ACTION_SCROLL_DOWN.id in actions,
                 n.collectionItemInfo?.rowIndex?.takeIf { it >= 0 },
-                n.collectionInfo?.rowCount?.takeIf { it >= 0 }, children)
+                n.collectionInfo?.rowCount?.takeIf { it >= 0 }, children, n.isHeading)
         }
         val tree = snapshot(root, 0)
         return Frame(ClockReader.read(tree), refs)
@@ -84,7 +89,11 @@ internal class AndroidClockPort(private val service: ClockService, private val p
         var last: Page? = null
         while (SystemClock.elapsedRealtime() < deadline) {
             delay(140)
-            val now = page()
+            guard()
+            val active = service.rootInActiveWindow
+            if (active?.packageName?.toString() != pkg || active.windowId != window)
+                throw ClockProblem("Clock lost focus while scrolling.")
+            val now = try { page() } catch (_: ClockProblem) { last = null; continue }
             val changed = now.signature() != from.signature() || now.forward != from.forward || now.back != from.back
             if (changed && last != null && last.signature() == now.signature() && last.forward == now.forward && last.back == now.back) return now
             last = now
@@ -108,12 +117,32 @@ internal class AndroidClockPort(private val service: ClockService, private val p
     }
 
     override suspend fun settleAfterTap(key: AlarmKey, enable: Boolean) {
-        val deadline = SystemClock.elapsedRealtime() + 2400
+        var deadline = SystemClock.elapsedRealtime() + 2600
+        var awaitingUser = false
         while (SystemClock.elapsedRealtime() < deadline) {
             delay(160)
-            val rows = page().entries.filter { it.alarm.key == key }
+            guard()
+            val root = service.rootInActiveWindow ?: continue
+            if (root.packageName?.toString() != pkg) throw ClockProblem("Clock lost focus while verifying the change.")
+            val current = if (root.windowId == window) try { page() } catch (_: ClockProblem) { null } else null
+            if (current == null) {
+                // An OEM may offer “skip once” or “turn off”. Only the user can answer.
+                if (!awaitingUser) {
+                    awaitingUser = true
+                    val message = "If Clock asks, choose the full alarm schedule to continue, or cancel."
+                    ClockSession.progress(message)
+                    android.widget.Toast.makeText(service, message, android.widget.Toast.LENGTH_LONG).show()
+                    deadline = SystemClock.elapsedRealtime() + 35_000
+                }
+                continue
+            }
+            val rows = current.entries.filter { it.alarm.key == key }
             if (rows.size > 1) throw ClockProblem("A matching alarm became ambiguous.")
             if (rows.isEmpty() || rows.single().alarm.enabled == enable) return
+            if (awaitingUser) {
+                awaitingUser = false
+                deadline = SystemClock.elapsedRealtime() + 1200
+            }
         }
         throw ClockProblem("Clock did not confirm ${key.time}. The click will not be repeated.")
     }

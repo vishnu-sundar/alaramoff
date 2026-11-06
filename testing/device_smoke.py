@@ -1,5 +1,4 @@
 """Run only against a disposable Android emulator. Never targets an OEM Clock."""
-import os
 import subprocess
 from pathlib import Path
 
@@ -11,6 +10,10 @@ def main():
         raise SystemExit("A disposable emulator is required")
     evidence = Path("evidence")
     evidence.mkdir(exist_ok=True)
+    production = Path("dist/AlarmOff-debug.apk")
+    if not production.exists():
+        production = Path("app/build/outputs/apk/debug/app-debug.apk")
+    adb("install", "-r", str(production))
     for pattern in ("**/outputs/apk/qa/app-qa.apk", "**/outputs/apk/debug/clock-fixture-debug.apk",
                     "**/outputs/apk/androidTest/debug/clock-fixture-debug-androidTest.apk"):
         apk, = Path(".").glob(pattern)

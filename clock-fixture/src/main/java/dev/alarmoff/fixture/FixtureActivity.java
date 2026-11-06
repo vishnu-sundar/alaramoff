@@ -62,7 +62,18 @@ public final class FixtureActivity extends Activity {
             Switch toggle = new Switch(FixtureActivity.this);
             toggle.setId(R.id.alarm_switch);
             toggle.setChecked(alarms.getBoolean("alarm_" + i, false));
-            toggle.setOnCheckedChangeListener((v, checked) -> alarms.edit().putBoolean("alarm_" + i, checked).commit());
+            toggle.setOnCheckedChangeListener((v, checked) -> {
+                if (i == 0 && !checked && alarms.getBoolean("first_prompt", true)) {
+                    alarms.edit().putBoolean("first_prompt", false).commit();
+                    v.setChecked(true);
+                    new android.app.AlertDialog.Builder(FixtureActivity.this)
+                        .setTitle("Repeating alarm")
+                        .setNegativeButton("Skip next", (dialog, which) -> {})
+                        .setPositiveButton("Turn off recurring alarm", (dialog, which) -> v.setChecked(false)).show();
+                } else {
+                    alarms.edit().putBoolean("alarm_" + i, checked).commit();
+                }
+            });
             row.addView(toggle);
             return row;
         }
