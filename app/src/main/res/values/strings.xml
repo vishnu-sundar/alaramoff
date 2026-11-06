@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">AlarmOff</string>
+    <string name="service_name">AlarmOff Clock access</string>
+    <string name="service_description">Reads the visible alarm list in OnePlus Clock after you tap Refresh. After you confirm a change, it operates matching alarm switches and checks their state. Alarm details stay on this device.</string>
+    <string name="clock_packages" translatable="false">com.oneplus.deskclock,com.oplus.alarmclock,com.coloros.alarmclock</string>
+    <string name="widget_title">Disable all alarms</string>
+    <string name="widget_description">Review active OnePlus alarms before turning them off.</string>
+    <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowBackground">#F7F6F1</item>
+    </style>
+</resources>

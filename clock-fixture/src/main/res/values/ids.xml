@@ -1,0 +1,5 @@
+<resources>
+    <item type="id" name="alarm_list"/><item type="id" name="alarm_time"/>
+    <item type="id" name="alarm_label"/><item type="id" name="alarm_repeat"/>
+    <item type="id" name="alarm_switch"/>
+</resources>

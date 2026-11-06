@@ -1,0 +1,3 @@
+<resources>
+    <string name="clock_packages" translatable="false">dev.alarmoff.fixture</string>
+</resources>
